@@ -32,10 +32,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 useEffect(() => {
     auth.init();
     setUser(auth.getSession());
-    setLoading(false); // ← loads instantly, no waiting
-    syncFromCloud();   // ← Firebase syncs silently in background
+    syncFromCloud().finally(() => setLoading(false));
   }, []);
 
+  
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
     localStorage.setItem('darkMode', String(darkMode));
