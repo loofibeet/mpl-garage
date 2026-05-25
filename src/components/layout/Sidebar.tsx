@@ -2,7 +2,7 @@ import { NavLink } from './NavLink';
 import { useApp } from '../../contexts/AppContext';
 import {
   LayoutDashboard, Building2, Truck, ClipboardList,
-  Users, FileText, Search, Settings, Wrench, LogOut, X
+  Users, FileText, Search, Settings, LogOut, X
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -29,9 +29,11 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
       {/* Logo */}
       <div className="flex items-center justify-between px-6 py-5 border-b border-slate-700/50">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center shadow-lg">
-            <Wrench className="w-5 h-5 text-white" />
-          </div>
+          <img
+            src="/mpl-logo.png"
+            alt="MPL"
+            className="w-12 h-12 object-contain flex-shrink-0"
+          />
           <div>
             <p className="text-sm font-bold text-white leading-tight">{t('appName')}</p>
             <p className="text-xs text-slate-400">Garage Pro</p>

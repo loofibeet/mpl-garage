@@ -1,10 +1,4 @@
-// ============================================================
-// storage.ts — localStorage (instant UI) + Firebase (cloud sync)
-// Pages do NOT need any changes
-// ============================================================
-import {
-  collection, getDocs, setDoc, deleteDoc, doc
-} from 'firebase/firestore';
+import { collection, getDocs, setDoc, deleteDoc, doc } from 'firebase/firestore';
 import { firestore } from './firebase';
 
 export interface LocalUser {
@@ -19,21 +13,19 @@ const DATA_TABLES = [
   'job_workers', 'job_parts', 'invoices', 'invoice_line_items',
 ];
 
-// ─── tiny ID generator ───────────────────────────────────────
 function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
-// ─── localStorage helpers ────────────────────────────────────
 function read<T>(table: string): T[] {
   try { return JSON.parse(localStorage.getItem(`garage_${table}`) ?? '[]'); }
   catch { return []; }
 }
+
 function write<T>(table: string, data: T[]): void {
   localStorage.setItem(`garage_${table}`, JSON.stringify(data));
 }
 
-// ─── Firebase sync helpers ───────────────────────────────────
 async function pushToCloud(table: string, id: string, data: Record<string, unknown>): Promise<void> {
   try { await setDoc(doc(firestore, table, id), data, { merge: true }); }
   catch (e) { console.warn('Firebase push failed:', e); }
@@ -44,7 +36,6 @@ async function deleteFromCloud(table: string, id: string): Promise<void> {
   catch (e) { console.warn('Firebase delete failed:', e); }
 }
 
-// ─── Pull ALL data from Firebase into localStorage ────────────
 export async function syncFromCloud(): Promise<void> {
   try {
     for (const table of DATA_TABLES) {
@@ -54,22 +45,13 @@ export async function syncFromCloud(): Promise<void> {
         write(table, rows);
       }
     }
+    // tell all pages to reload their data
+    window.dispatchEvent(new Event('firebase-synced'));
   } catch (e) {
-    console.warn('Firebase sync failed (offline?):', e);
+    console.warn('Firebase sync failed:', e);
   }
 }
 
-// ─── Push ALL localStorage data to Firebase ──────────────────
-export async function pushAllToCloud(): Promise<void> {
-  for (const table of DATA_TABLES) {
-    const rows = read<Record<string, unknown>>(table);
-    for (const row of rows) {
-      if (row.id) await pushToCloud(table, row.id as string, row);
-    }
-  }
-}
-
-// ─── database (db) ───────────────────────────────────────────
 export const db = {
   getAll<T>(table: string): T[] {
     return read<T>(table);
@@ -105,7 +87,6 @@ export const db = {
   },
 };
 
-// removeWhere used in Jobs and Invoices
 export function removeWhere(table: string, field: string, value: string): void {
   const rows = read<Record<string, unknown>>(table);
   const toDelete = rows.filter(r => r[field] === value);
@@ -113,7 +94,6 @@ export function removeWhere(table: string, field: string, value: string): void {
   toDelete.forEach(r => { if (r.id) deleteFromCloud(table, r.id as string); });
 }
 
-// ─── auth (localStorage based) ───────────────────────────────
 export const auth = {
   init(): void {
     const users = read('users');

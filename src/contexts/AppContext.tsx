@@ -29,13 +29,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const isRTL = language === 'ar';
   const t = (key: TranslationKey): string => translations[language][key] ?? translations.en[key];
 
-useEffect(() => {
+  useEffect(() => {
     auth.init();
     setUser(auth.getSession());
-    syncFromCloud().finally(() => setLoading(false));
+    setLoading(false);          // show app instantly
+    syncFromCloud();            // sync firebase in background
   }, []);
 
-  
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
     localStorage.setItem('darkMode', String(darkMode));
