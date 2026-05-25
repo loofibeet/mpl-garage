@@ -112,7 +112,7 @@ export function Workers() {
     
     return registry[key] || {
       status: 'present',
-      hours: 6, 
+      hours: 8, 
       tips: 0,
       lunchMoney: false,
       notes: ''
