@@ -57,7 +57,7 @@ export function Trucks() {
   };
 
   const handleDelete = (id: string) => {
-    if (!confirm('Delete this truck?')) return;
+    if (!confirm(t('deleteTruckConfirm'))) return;
     db.remove('trucks', id); load();
   };
 
@@ -79,9 +79,9 @@ export function Trucks() {
     <Layout title={t('trucks')}>
       <div className="space-y-5">
         <div className="flex flex-col sm:flex-row gap-3">
-          <input type="text" placeholder="Search plate, VIN, make, model..." value={search} onChange={e => setSearch(e.target.value)} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20" />
+          <input type="text" placeholder={t('searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20" />
           <select value={filterCompany} onChange={e => setFilterCompany(e.target.value)} className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20">
-            <option value="">All Companies</option>
+            <option value="">{t('allCompanies')}</option>
             {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>{t('addTruck')}</Button>
@@ -109,7 +109,7 @@ export function Trucks() {
                   {truck.vin && <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate col-span-2">VIN: {truck.vin}</div>}
                 </div>
                 <div className="flex gap-2 pt-3 mt-2 border-t border-slate-100 dark:border-slate-700/50">
-                  <button onClick={() => { window.history.pushState({}, '', `/trucks/${truck.id}`); window.dispatchEvent(new PopStateEvent('popstate')); }} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-sky-600 transition-colors px-2 py-1 rounded"><Eye className="w-3.5 h-3.5" /> View</button>
+                  <button onClick={() => { window.history.pushState({}, '', `/trucks/${truck.id}`); window.dispatchEvent(new PopStateEvent('popstate')); }} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-sky-600 transition-colors px-2 py-1 rounded"><Eye className="w-3.5 h-3.5" /> {t('view')}</button>
                   <button onClick={() => openEdit(truck)} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-orange-600 transition-colors px-2 py-1 rounded"><Pencil className="w-3.5 h-3.5" /> {t('edit')}</button>
                   <button onClick={() => handleDelete(truck.id)} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-600 transition-colors px-2 py-1 rounded ml-auto"><Trash2 className="w-3.5 h-3.5" /> {t('delete')}</button>
                 </div>
@@ -119,9 +119,9 @@ export function Trucks() {
         )}
       </div>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editItem ? 'Edit Truck' : t('addTruck')} size="lg">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editItem ? t('editTruckTitle') : t('addTruck')} size="lg">
         <div className="space-y-4">
-          <Select label={t('company') + ' *'} value={form.company_id} onChange={e => setForm(f => ({ ...f, company_id: e.target.value }))} options={[{ value: '', label: 'Select company...' }, ...companies.map(c => ({ value: c.id, label: c.name }))]} />
+          <Select label={t('company') + ' *'} value={form.company_id} onChange={e => setForm(f => ({ ...f, company_id: e.target.value }))} options={[{ value: '', label: t('selectCompany') }, ...companies.map(c => ({ value: c.id, label: c.name }))]} />
           <div className="grid grid-cols-2 gap-4">
             <Input label={t('make')}  value={form.make}  onChange={e => setForm(f => ({ ...f, make:  e.target.value }))} placeholder="Mercedes, Volvo..." />
             <Input label={t('model')} value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} placeholder="Actros, FH16..." />
@@ -136,9 +136,9 @@ export function Trucks() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Select label={t('status')} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as Truck['status'] }))} options={statusOptions} />
-            <Input label={t('color')} value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))} placeholder="White, Red..." />
+            <Input label={t('color')} value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))} placeholder={t('color')} />
           </div>
-          <Textarea label={t('notes')} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} placeholder="Additional notes..." />
+          <Textarea label={t('notes')} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} placeholder={t('notes')} />
           <div className="flex gap-3 pt-2">
             <Button variant="outline" onClick={() => setModalOpen(false)} className="flex-1 justify-center">{t('cancel')}</Button>
             <Button onClick={handleSave} loading={saving} className="flex-1 justify-center">{t('save')}</Button>

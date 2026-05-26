@@ -99,7 +99,7 @@ export function Jobs() {
   };
 
   const handleDelete = (id: string) => {
-    if (!confirm('Delete this work order?')) return;
+    if (!confirm(t('deleteJobConfirm'))) return;
     removeWhere('job_parts', 'job_id', id); removeWhere('job_workers', 'job_id', id); db.remove('repair_jobs', id); load();
   };
 
@@ -114,9 +114,9 @@ export function Jobs() {
     <Layout title={t('jobs')}>
       <div className="space-y-5">
         <div className="flex flex-col sm:flex-row gap-3">
-          <input type="text" placeholder="Search job #, company, plate..." value={search} onChange={e => setSearch(e.target.value)} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20" />
+          <input type="text" placeholder={t('searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20" />
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20">
-            <option value="">All Status</option>
+            <option value="">{t('allStatus')}</option>
             {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           <Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>{t('addJob')}</Button>
@@ -156,15 +156,15 @@ export function Jobs() {
         )}
       </div>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editItem ? 'Edit Work Order' : t('addJob')} size="xl">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editItem ? t('editJobTitle') : t('addJob')} size="xl">
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-4">
             <Input label={t('jobNumber') + ' *'} value={form.job_number} onChange={e => setForm(f => ({ ...f, job_number: e.target.value }))} />
             <Select label={t('priority')} value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value as RepairJob['priority'] }))} options={priorityOptions} />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Select label={t('company') + ' *'} value={form.company_id} onChange={e => handleCompanyChange(e.target.value)} options={[{ value: '', label: 'Select company...' }, ...companies.map(c => ({ value: c.id, label: c.name }))]} />
-            <Select label={t('truck') + ' *'} value={form.truck_id} onChange={e => setForm(f => ({ ...f, truck_id: e.target.value }))} options={[{ value: '', label: 'Select truck...' }, ...(filteredTrucks.length > 0 ? filteredTrucks : trucks.filter(t => !form.company_id || t.company_id === form.company_id)).map(t => ({ value: t.id, label: `${t.plate_number} — ${t.make} ${t.model}` }))]} />
+            <Select label={t('company') + ' *'} value={form.company_id} onChange={e => handleCompanyChange(e.target.value)} options={[{ value: '', label: t('selectCompany') }, ...companies.map(c => ({ value: c.id, label: c.name }))]} />
+            <Select label={t('truck') + ' *'} value={form.truck_id} onChange={e => setForm(f => ({ ...f, truck_id: e.target.value }))} options={[{ value: '', label: t('selectTruck') }, ...(filteredTrucks.length > 0 ? filteredTrucks : trucks.filter(t => !form.company_id || t.company_id === form.company_id)).map(t => ({ value: t.id, label: `${t.plate_number} - ${t.make} ${t.model}` }))]} />
           </div>
           <Select label={t('status')} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as RepairJob['status'] }))} options={statusOptions} />
           <Textarea label={t('problemDescription')} value={form.problem_description} onChange={e => setForm(f => ({ ...f, problem_description: e.target.value }))} rows={2} />
@@ -184,9 +184,9 @@ export function Jobs() {
             <div className="space-y-2">
               {parts.map((part, i) => (
                 <div key={i} className="flex gap-2 items-end">
-                  <div className="flex-1"><Input placeholder="Part name" value={part.part_name} onChange={e => setParts(p => p.map((x, xi) => xi === i ? { ...x, part_name: e.target.value } : x))} /></div>
-                  <div className="w-24"><Input placeholder="Qty" type="number" value={part.quantity} onChange={e => setParts(p => p.map((x, xi) => xi === i ? { ...x, quantity: e.target.value } : x))} /></div>
-                  <div className="w-24"><Input placeholder="Price" type="number" value={part.unit_price} onChange={e => setParts(p => p.map((x, xi) => xi === i ? { ...x, unit_price: e.target.value } : x))} /></div>
+                  <div className="flex-1"><Input placeholder={t('partName')} value={part.part_name} onChange={e => setParts(p => p.map((x, xi) => xi === i ? { ...x, part_name: e.target.value } : x))} /></div>
+                  <div className="w-24"><Input placeholder={t('quantity')} type="number" value={part.quantity} onChange={e => setParts(p => p.map((x, xi) => xi === i ? { ...x, quantity: e.target.value } : x))} /></div>
+                  <div className="w-24"><Input placeholder={t('unitPrice')} type="number" value={part.unit_price} onChange={e => setParts(p => p.map((x, xi) => xi === i ? { ...x, unit_price: e.target.value } : x))} /></div>
                   <button onClick={() => setParts(p => p.filter((_, xi) => xi !== i))} className="p-2 text-red-400 hover:text-red-600 mb-0.5"><X className="w-4 h-4" /></button>
                 </div>
               ))}
@@ -202,11 +202,11 @@ export function Jobs() {
                 <div key={i} className="flex gap-2 items-end">
                   <div className="flex-1">
                     <select value={aw.worker_id} onChange={e => setAssignedWorkers(w => w.map((x, xi) => xi === i ? { ...x, worker_id: e.target.value } : x))} className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-orange-400 focus:outline-none">
-                      <option value="">Select worker...</option>
+                      <option value="">{t('selectWorker')}</option>
                       {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                     </select>
                   </div>
-                  <div className="w-28"><Input placeholder="Hours" type="number" step="0.5" value={aw.hours_worked} onChange={e => setAssignedWorkers(w => w.map((x, xi) => xi === i ? { ...x, hours_worked: e.target.value } : x))} /></div>
+                  <div className="w-28"><Input placeholder={t('hours')} type="number" step="0.5" value={aw.hours_worked} onChange={e => setAssignedWorkers(w => w.map((x, xi) => xi === i ? { ...x, hours_worked: e.target.value } : x))} /></div>
                   <button onClick={() => setAssignedWorkers(w => w.filter((_, xi) => xi !== i))} className="p-2 text-red-400 hover:text-red-600 mb-0.5"><X className="w-4 h-4" /></button>
                 </div>
               ))}
@@ -221,7 +221,7 @@ export function Jobs() {
       </Modal>
 
       {detailJob && (
-        <Modal open={!!detailJob} onClose={() => setDetailJob(null)} title={`Work Order: ${detailJob.job_number}`} size="lg">
+        <Modal open={!!detailJob} onClose={() => setDetailJob(null)} title={`${t('workOrderTitle')}: ${detailJob.job_number}`} size="lg">
           <div className="space-y-5">
             <div className="flex gap-2 flex-wrap">
               <Badge variant={statusVariant(detailJob.status)}>{statusLabel(detailJob.status)}</Badge>

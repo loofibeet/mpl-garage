@@ -8,7 +8,7 @@ import { Badge, statusVariant } from '../components/ui/Badge';
 import { useApp } from '../contexts/AppContext';
 import { db } from '../lib/storage';
 import { Invoice, Company, RepairJob, Truck, InvoiceLineItem } from '../lib/database.types';
-import { Plus, FileText, Printer, Trash2, Pencil, Eye, X, MessageCircle } from 'lucide-react';
+import { Plus, FileText, Printer, Trash2, Pencil, Eye, X, MessageCircle, Mail } from 'lucide-react';
 
 function generateInvoiceNumber() {
   const now = new Date();
@@ -26,15 +26,22 @@ const emptyForm = {
   discount: '0', notes: '', payment_method: '',
 };
 const emptyLine = { description: '', quantity: '1', unit_price: '0', item_type: 'service' as InvoiceLineItem['item_type'] };
+type InvoiceWithRelations = Invoice & { company?: Company; job?: RepairJob & { truck?: Truck }; lines?: InvoiceLineItem[] };
+
+function normalizeWhatsappNumber(phone: string): string {
+  const trimmed = phone.trim();
+  const prefix = trimmed.startsWith('+') ? '+' : '';
+  return `${prefix}${trimmed.replace(/\D/g, '')}`;
+}
 
 export function Invoices() {
   const { t } = useApp();
-  const [invoices,  setInvoices]  = useState<(Invoice & { company?: Company; job?: RepairJob & { truck?: Truck } })[]>([]);
+  const [invoices,  setInvoices]  = useState<InvoiceWithRelations[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [jobs,      setJobs]      = useState<(RepairJob & { truck?: Truck })[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [detailInvoice, setDetailInvoice] = useState<(Invoice & { company?: Company; job?: RepairJob & { truck?: Truck }; lines?: InvoiceLineItem[] }) | null>(null);
+  const [detailInvoice, setDetailInvoice] = useState<InvoiceWithRelations | null>(null);
   const [editItem,  setEditItem]  = useState<Invoice | null>(null);
   const [form,      setForm]      = useState(emptyForm);
   const [lines,     setLines]     = useState<typeof emptyLine[]>([]);
@@ -88,6 +95,7 @@ export function Invoices() {
 
   const handleSave = () => {
     if (!form.company_id || !form.invoice_number) return;
+    setSaving(true);
     const { subtotal, taxAmount, total } = calcTotals(lines, parseFloat(form.tax_rate) || 0, parseFloat(form.discount) || 0);
     const payload = {
       invoice_number: form.invoice_number, job_id: form.job_id || null, company_id: form.company_id,
@@ -109,11 +117,11 @@ export function Invoices() {
       });
     });
 
-    setModalOpen(false); load();
+    setSaving(false); setModalOpen(false); load();
   };
 
   const handleDelete = (id: string) => {
-    if (!confirm('Supprimer cette facture ?')) return;
+    if (!confirm(t('deleteInvoiceConfirm'))) return;
     removeWhere('invoice_line_items', 'invoice_id', id);
     db.remove('invoices', id);
     load();
@@ -124,7 +132,7 @@ export function Invoices() {
     if (!content) return;
     const win = window.open('', '_blank');
     if (!win) return;
-    win.document.write(`<html><head><title>Facture — MPL</title><style>
+    win.document.write(`<html><head><title>${t('invoicePrintTitle')}</title><style>
       body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 50px; color: #1e293b; background: #fff; line-height: 1.5; }
       .header-container { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #ea580c; padding-bottom: 25px; margin-bottom: 35px; }
       .brand-title { font-size: 28px; font-weight: 800; color: #0f172a; margin: 0; text-transform: uppercase; letter-spacing: -0.5px; }
@@ -159,30 +167,50 @@ export function Invoices() {
     win.print();
   };
 
-  const handleWhatsApp = (inv: typeof invoices[0]) => {
-    const msg = encodeURIComponent(`Facture ${inv.invoice_number}\nEntreprise: ${inv.company?.name}\nTotal: €${inv.total.toFixed(2)}\nStatut: ${inv.status}`);
-    window.open(`https://wa.me/?text=${msg}`, '_blank');
+  const invoiceShareText = (inv: InvoiceWithRelations) =>
+    `${t('invoiceWhatsappMessage')} ${inv.invoice_number}\n${t('companyLabel')}: ${inv.company?.name || ''}\n${t('totalLabel')}: ${inv.total.toFixed(2)} EUR\n${t('statusLabel')}: ${statusLabel(inv.status)}`;
+
+  const handleWhatsApp = (inv: InvoiceWithRelations) => {
+    const phone = inv.company?.phone?.trim() || window.prompt(`${t('enterWhatsappNumber')}:`);
+    if (!phone) return;
+
+    const whatsappNumber = normalizeWhatsappNumber(phone);
+    if (!whatsappNumber.replace(/\D/g, '')) return;
+
+    const msg = encodeURIComponent(`${invoiceShareText(inv)}\n\n${t('whatsappPdfNote')}`);
+    window.open(`https://wa.me/${whatsappNumber.replace(/^\+/, '')}?text=${msg}`, '_blank');
+  };
+
+  const handleEmail = (inv: InvoiceWithRelations) => {
+    const email = inv.company?.email?.trim() || window.prompt(`${t('enterEmailAddress')}:`);
+    if (!email) return;
+
+    const subject = encodeURIComponent(`${t('invoiceDocument')} ${inv.invoice_number}`);
+    const body = encodeURIComponent(`${invoiceShareText(inv)}\n\n${t('emailPdfNote')}`);
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`;
+    const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
+    window.open(gmailUrl, '_blank') || window.location.assign(mailtoUrl);
   };
 
   const filtered = invoices.filter(inv => { const q = search.toLowerCase(); return !q || inv.invoice_number.toLowerCase().includes(q) || inv.company?.name.toLowerCase().includes(q); });
 
-  const statusOptions  = [{ value: 'draft', label: 'Brouillon' }, { value: 'sent', label: 'Envoyée' }, { value: 'paid', label: 'Payée' }, { value: 'overdue', label: 'En retard' }, { value: 'cancelled', label: 'Annulée' }];
+  const statusOptions  = [{ value: 'draft', label: t('draft') }, { value: 'sent', label: t('sent') }, { value: 'paid', label: t('paid') }, { value: 'overdue', label: t('overdue') }, { value: 'cancelled', label: t('cancelled') }];
   const statusLabel    = (s: string) => statusOptions.find(o => o.value === s)?.label || s;
-  const itemTypeOptions = [{ value: 'service', label: 'Main d\'œuvre' }, { value: 'part', label: 'Pièce rechange' }, { value: 'labor', label: 'Contrôle' }];
+  const itemTypeOptions = [{ value: 'service', label: t('service') }, { value: 'part', label: t('part') }, { value: 'labor', label: t('control') }];
   const { subtotal, taxAmount, total } = calcTotals(lines, parseFloat(form.tax_rate) || 0, parseFloat(form.discount) || 0);
 
   return (
-    <Layout title="Facturation & Devis">
+    <Layout title={t('invoicePageTitle')}>
       <div className="space-y-5">
         <div className="flex flex-col sm:flex-row gap-3">
-          <input type="text" placeholder="Rechercher numéro, entreprise..." value={search} onChange={e => setSearch(e.target.value)} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20" />
-          <Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>Émettre une facture</Button>
+          <input type="text" placeholder={t('searchInvoicePlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20" />
+          <Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>{t('issueInvoice')}</Button>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center h-48 text-slate-400"><div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mr-3" />Chargement...</div>
+          <div className="flex items-center justify-center h-48 text-slate-400"><div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mr-3" />{t('loading')}</div>
         ) : filtered.length === 0 ? (
-          <Card className="p-12 text-center"><FileText className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" /><p className="text-slate-500 dark:text-slate-400">Aucune facture enregistrée.</p><Button className="mt-4" icon={<Plus className="w-4 h-4" />} onClick={openCreate}>Créer une facture</Button></Card>
+          <Card className="p-12 text-center"><FileText className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" /><p className="text-slate-500 dark:text-slate-400">{t('noInvoices')}</p><Button className="mt-4" icon={<Plus className="w-4 h-4" />} onClick={openCreate}>{t('createInvoice')}</Button></Card>
         ) : (
           <div className="space-y-3">
             {filtered.map(inv => (
@@ -198,14 +226,15 @@ export function Invoices() {
                     {inv.job?.truck && <p className="text-xs text-slate-500 dark:text-slate-400">{inv.job.truck.make} {inv.job.truck.model} · <span className="font-mono">{inv.job.truck.plate_number}</span></p>}
                     <div className="flex items-center gap-3 mt-1.5">
                       <span className="text-xs text-slate-400">{inv.issue_date}</span>
-                      <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{inv.total.toFixed(2)} €</span>
+                      <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{inv.total.toFixed(2)} EUR</span>
                     </div>
                   </div>
                   <div className="flex flex-col gap-1 flex-shrink-0">
-                    <button onClick={() => openDetail(inv)} className="p-1.5 text-slate-400 hover:text-sky-600 rounded transition-colors" title="Consulter"><Eye className="w-4 h-4" /></button>
-                    <button onClick={() => openEdit(inv)} className="p-1.5 text-slate-400 hover:text-orange-600 rounded transition-colors" title="Modifier"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => handleWhatsApp(inv)} className="p-1.5 text-slate-400 hover:text-green-600 rounded transition-colors" title="Partager WhatsApp"><MessageCircle className="w-4 h-4" /></button>
-                    <button onClick={() => handleDelete(inv.id)} className="p-1.5 text-slate-400 hover:text-red-600 rounded transition-colors" title="Supprimer"><Trash2 className="w-4 h-4" /></button>
+                    <button onClick={() => openDetail(inv)} className="p-1.5 text-slate-400 hover:text-sky-600 rounded transition-colors" title={t('view')}><Eye className="w-4 h-4" /></button>
+                    <button onClick={() => openEdit(inv)} className="p-1.5 text-slate-400 hover:text-orange-600 rounded transition-colors" title={t('edit')}><Pencil className="w-4 h-4" /></button>
+                    <button onClick={() => handleWhatsApp(inv)} className="p-1.5 text-slate-400 hover:text-green-600 rounded transition-colors" title={inv.company?.phone || t('sendWhatsapp')}><MessageCircle className="w-4 h-4" /></button>
+                    <button onClick={() => handleEmail(inv)} className="p-1.5 text-slate-400 hover:text-sky-600 rounded transition-colors" title={inv.company?.email || t('sendEmail')}><Mail className="w-4 h-4" /></button>
+                    <button onClick={() => handleDelete(inv.id)} className="p-1.5 text-slate-400 hover:text-red-600 rounded transition-colors" title={t('delete')}><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
               </Card>
@@ -215,29 +244,29 @@ export function Invoices() {
       </div>
 
       {/* MODAL : CRÉER / MODIFIER UNE FACTURE */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editItem ? 'Modifier la Facture' : 'Nouvelle Facture'} size="xl">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editItem ? t('editInvoiceTitle') : t('newInvoice')} size="xl">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Numéro de facture *" value={form.invoice_number} onChange={e => setForm(f => ({ ...f, invoice_number: e.target.value }))} />
-            <Select label="Statut de paiement" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as Invoice['status'] }))} options={statusOptions} />
+            <Input label={`${t('invoiceNumber')} *`} value={form.invoice_number} onChange={e => setForm(f => ({ ...f, invoice_number: e.target.value }))} />
+            <Select label={t('paymentStatus')} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as Invoice['status'] }))} options={statusOptions} />
           </div>
-          <Select label="Client / Entreprise *" value={form.company_id} onChange={e => setForm(f => ({ ...f, company_id: e.target.value }))} options={[{ value: '', label: 'Sélectionner un client...' }, ...companies.map(c => ({ value: c.id, label: c.name }))]} />
-          <Select label="Ordre de Réparation lié" value={form.job_id} onChange={e => setForm(f => ({ ...f, job_id: e.target.value }))} options={[{ value: '', label: 'Aucun' }, ...jobs.map(j => ({ value: j.id, label: `${j.job_number} — ${j.truck?.plate_number}` }))]} />
+          <Select label={`${t('clientCompany')} *`} value={form.company_id} onChange={e => setForm(f => ({ ...f, company_id: e.target.value }))} options={[{ value: '', label: t('selectCompany') }, ...companies.map(c => ({ value: c.id, label: c.name }))]} />
+          <Select label={t('linkedRepairOrder')} value={form.job_id} onChange={e => setForm(f => ({ ...f, job_id: e.target.value }))} options={[{ value: '', label: t('noLinkedJob') }, ...jobs.map(j => ({ value: j.id, label: `${j.job_number} - ${j.truck?.plate_number}` }))]} />
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Date d'émission" type="date" value={form.issue_date} onChange={e => setForm(f => ({ ...f, issue_date: e.target.value }))} />
-            <Input label="Date d'échéance" type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} />
+            <Input label={t('issueDate')} type="date" value={form.issue_date} onChange={e => setForm(f => ({ ...f, issue_date: e.target.value }))} />
+            <Input label={t('dueDate')} type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} />
           </div>
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Lignes de facturation</label>
-              <Button size="sm" variant="outline" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setLines(l => [...l, { ...emptyLine }])}>Ajouter une ligne</Button>
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('billingLines')}</label>
+              <Button size="sm" variant="outline" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setLines(l => [...l, { ...emptyLine }])}>{t('addLine')}</Button>
             </div>
             <div className="space-y-2">
               {lines.map((line, i) => (
                 <div key={i} className="flex gap-2 items-end">
-                  <div className="flex-1"><Input placeholder="Description des travaux ou pièces" value={line.description} onChange={e => setLines(l => l.map((x, xi) => xi === i ? { ...x, description: e.target.value } : x))} /></div>
-                  <div className="w-20"><Input placeholder="Qté" type="number" value={line.quantity} onChange={e => setLines(l => l.map((x, xi) => xi === i ? { ...x, quantity: e.target.value } : x))} /></div>
-                  <div className="w-24"><Input placeholder="P.U (€)" type="number" value={line.unit_price} onChange={e => setLines(l => l.map((x, xi) => xi === i ? { ...x, unit_price: e.target.value } : x))} /></div>
+                  <div className="flex-1"><Input placeholder={t('lineDescriptionPlaceholder')} value={line.description} onChange={e => setLines(l => l.map((x, xi) => xi === i ? { ...x, description: e.target.value } : x))} /></div>
+                  <div className="w-20"><Input placeholder={t('quantity')} type="number" value={line.quantity} onChange={e => setLines(l => l.map((x, xi) => xi === i ? { ...x, quantity: e.target.value } : x))} /></div>
+                  <div className="w-24"><Input placeholder={t('unitPrice')} type="number" value={line.unit_price} onChange={e => setLines(l => l.map((x, xi) => xi === i ? { ...x, unit_price: e.target.value } : x))} /></div>
                   <div className="w-32">
                     <select value={line.item_type} onChange={e => setLines(l => l.map((x, xi) => xi === i ? { ...x, item_type: e.target.value as InvoiceLineItem['item_type'] } : x))} className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-orange-400 focus:outline-none">
                       {itemTypeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -249,31 +278,32 @@ export function Invoices() {
             </div>
           </div>
           <div className="grid grid-cols-3 gap-4">
-            <Input label="TVA (%)" type="number" step="0.1" value={form.tax_rate} onChange={e => setForm(f => ({ ...f, tax_rate: e.target.value }))} />
-            <Input label="Remise (€)" type="number" value={form.discount} onChange={e => setForm(f => ({ ...f, discount: e.target.value }))} />
-            <Input label="Méthode de paiement" value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))} placeholder="Espèces, Virement..." />
+            <Input label={`${t('vat')} (%)`} type="number" step="0.1" value={form.tax_rate} onChange={e => setForm(f => ({ ...f, tax_rate: e.target.value }))} />
+            <Input label={`${t('discountAmount')} (EUR)`} type="number" value={form.discount} onChange={e => setForm(f => ({ ...f, discount: e.target.value }))} />
+            <Input label={t('paymentMethod')} value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))} placeholder={t('paymentMethod')} />
           </div>
           <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 space-y-1.5 text-sm">
-            <div className="flex justify-between text-slate-600 dark:text-slate-400"><span>Sous-total HT</span><span>{subtotal.toFixed(2)} €</span></div>
-            <div className="flex justify-between text-slate-600 dark:text-slate-400"><span>TVA ({form.tax_rate}%)</span><span>{taxAmount.toFixed(2)} €</span></div>
-            <div className="flex justify-between text-slate-600 dark:text-slate-400"><span>Remise appliquée</span><span>-{(parseFloat(form.discount) || 0).toFixed(2)} €</span></div>
-            <div className="flex justify-between font-bold text-slate-800 dark:text-slate-100 text-base border-t border-slate-200 dark:border-slate-700 pt-1.5"><span>Montant TTC</span><span>{total.toFixed(2)} €</span></div>
+            <div className="flex justify-between text-slate-600 dark:text-slate-400"><span>{t('subtotalExTax')}</span><span>{subtotal.toFixed(2)} EUR</span></div>
+            <div className="flex justify-between text-slate-600 dark:text-slate-400"><span>{t('vat')} ({form.tax_rate}%)</span><span>{taxAmount.toFixed(2)} EUR</span></div>
+            <div className="flex justify-between text-slate-600 dark:text-slate-400"><span>{t('appliedDiscount')}</span><span>-{(parseFloat(form.discount) || 0).toFixed(2)} EUR</span></div>
+            <div className="flex justify-between font-bold text-slate-800 dark:text-slate-100 text-base border-t border-slate-200 dark:border-slate-700 pt-1.5"><span>{t('amountInclTax')}</span><span>{total.toFixed(2)} EUR</span></div>
           </div>
-          <Textarea label="Notes & Conditions de règlement" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} placeholder="Conditions de paiement, RIB..." />
+          <Textarea label={t('paymentTermsNotes')} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} placeholder={t('paymentTermsPlaceholder')} />
           <div className="flex gap-3 pt-2">
-            <Button variant="outline" onClick={() => setModalOpen(false)} className="flex-1 justify-center">Annuler</Button>
-            <Button onClick={handleSave} loading={saving} className="flex-1 justify-center">Enregistrer</Button>
+            <Button variant="outline" onClick={() => setModalOpen(false)} className="flex-1 justify-center">{t('cancel')}</Button>
+            <Button onClick={handleSave} loading={saving} className="flex-1 justify-center">{t('save')}</Button>
           </div>
         </div>
       </Modal>
 
       {/* MODAL : VISUALISATION ET REÇU PRÊT POUR IMPRESSION (PDF READY) */}
       {detailInvoice && (
-        <Modal open={!!detailInvoice} onClose={() => setDetailInvoice(null)} title="Aperçu avant Impression" size="lg">
+        <Modal open={!!detailInvoice} onClose={() => setDetailInvoice(null)} title={t('invoicePreview')} size="lg">
           <div>
             <div className="flex gap-2 mb-6 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-              <Button icon={<Printer className="w-4 h-4" />} onClick={handlePrint}>Lancer l'impression PDF</Button>
-              <Button variant="outline" icon={<MessageCircle className="w-4 h-4" />} onClick={() => handleWhatsApp(detailInvoice)}>Envoyer par WhatsApp</Button>
+              <Button icon={<Printer className="w-4 h-4" />} onClick={handlePrint}>{t('printPdf')}</Button>
+              <Button variant="outline" icon={<MessageCircle className="w-4 h-4" />} onClick={() => handleWhatsApp(detailInvoice)}>{t('sendWhatsapp')}</Button>
+              <Button variant="outline" icon={<Mail className="w-4 h-4" />} onClick={() => handleEmail(detailInvoice)}>{t('sendEmail')}</Button>
             </div>
             
             <div ref={printRef} className="bg-white p-2 text-slate-800">
@@ -281,18 +311,18 @@ export function Invoices() {
               <div className="header-container">
                 <div>
                   <h1 className="brand-title">MPL — Mécanique Poids Lourds</h1>
-                  <p className="brand-subtitle font-mono">Réparation & Maintenance Industrielle</p>
+                  <p className="brand-subtitle font-mono">Repair & Industrial Maintenance</p>
                   <p className="brand-details">
                     Zone Artisanale des Transports<br />
-                    Tél: +33 6 69 00 56 51 · ml.77.mpl@gmail.com<br />
-                    Siret: 123 456 789 00012 — Code APE 4520B
+                    Tel: +33 6 69 00 56 51 · ml.77.mpl@gmail.com<br />
+                    Siret: 123 456 789 00012 - Code APE 4520B
                   </p>
                 </div>
                 <div className="invoice-title-container">
-                  <h2 className="invoice-head">Facture</h2>
+                  <h2 className="invoice-head">{t('invoiceDocument')}</h2>
                   <p className="invoice-number">{detailInvoice.invoice_number}</p>
                   <div style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.5px', marginTop: '6px' }}>
-                    Statut : {statusLabel(detailInvoice.status)}
+                    {t('status')}: {statusLabel(detailInvoice.status)}
                   </div>
                 </div>
               </div>
@@ -300,22 +330,22 @@ export function Invoices() {
               {/* GRILLE D'INFORMATION EMETTEUR / CLIENT */}
               <div className="info-grid">
                 <div className="info-block">
-                  <div className="block-label">Facturé à :</div>
+                  <div className="block-label">{t('billedTo')}</div>
                   <p className="info-text" style={{ fontWeight: 'bold', fontSize: '14px', color: '#0f172a' }}>{detailInvoice.company?.name}</p>
                   <p className="info-text">{detailInvoice.company?.address}</p>
-                  <p className="info-text">Tél: {detailInvoice.company?.phone}</p>
+                  <p className="info-text">{t('phone')}: {detailInvoice.company?.phone}</p>
                 </div>
                 
                 <div className="info-block" style={{ textAlign: 'right' }}>
-                  <div className="block-label">Détails administratifs :</div>
-                  <p className="info-text"><strong>Date d'émission :</strong> {detailInvoice.issue_date}</p>
-                  {detailInvoice.due_date && <p className="info-text"><strong>Date d'échéance :</strong> {detailInvoice.due_date}</p>}
+                  <div className="block-label">{t('adminDetails')}</div>
+                  <p className="info-text"><strong>{t('issueDate')}:</strong> {detailInvoice.issue_date}</p>
+                  {detailInvoice.due_date && <p className="info-text"><strong>{t('dueDate')}:</strong> {detailInvoice.due_date}</p>}
                   
                   {detailInvoice.job?.truck && (
                     <div className="vehicle-badge" style={{ textAlign: 'left' }}>
-                      <span style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '2px' }}>Véhicule pris en charge :</span>
+                      <span style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '2px' }}>{t('vehicleServiced')}</span>
                       <strong style={{ fontSize: '13px', color: '#1e293b' }}>{detailInvoice.job.truck.make} {detailInvoice.job.truck.model}</strong>
-                      <span style={{ fontFamily: 'monospace', display: 'block', fontSize: '12px', color: '#ea580c', fontWeight: 'bold', marginTop: '2px' }}>Matricule : {detailInvoice.job.truck.plate_number}</span>
+                      <span style={{ fontFamily: 'monospace', display: 'block', fontSize: '12px', color: '#ea580c', fontWeight: 'bold', marginTop: '2px' }}>{t('licensePlate')} {detailInvoice.job.truck.plate_number}</span>
                     </div>
                   )}
                 </div>
@@ -327,10 +357,10 @@ export function Invoices() {
                   <table>
                     <thead>
                       <tr>
-                        <th>Désignation des travaux / pièces</th>
-                        <th style={{ width: '80px' }}>Qté</th>
-                        <th style={{ width: '110px' }}>Prix Unitaire</th>
-                        <th style={{ width: '120px' }}>Total HT</th>
+                        <th>{t('designation')}</th>
+                        <th style={{ width: '80px' }}>{t('quantity')}</th>
+                        <th style={{ width: '110px' }}>{t('priceUnit')}</th>
+                        <th style={{ width: '120px' }}>{t('totalExTax')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -341,8 +371,8 @@ export function Invoices() {
                             <span style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: '600' }}>Type: {line.item_type}</span>
                           </td>
                           <td>{line.quantity}</td>
-                          <td>{line.unit_price.toFixed(2)} €</td>
-                          <td style={{ fontWeight: '600' }}>{line.total.toFixed(2)} €</td>
+                          <td>{line.unit_price.toFixed(2)} EUR</td>
+                          <td style={{ fontWeight: '600' }}>{line.total.toFixed(2)} EUR</td>
                         </tr>
                       ))}
                     </tbody>
@@ -354,28 +384,28 @@ export function Invoices() {
               <div className="totals-container">
                 <div className="totals-box">
                   <div className="total-row">
-                    <span>Total Général HT :</span>
-                    <span style={{ fontWeight: '600', color: '#334155' }}>{detailInvoice.subtotal.toFixed(2)} €</span>
+                    <span>{t('generalTotalExTax')}</span>
+                    <span style={{ fontWeight: '600', color: '#334155' }}>{detailInvoice.subtotal.toFixed(2)} EUR</span>
                   </div>
                   {detailInvoice.tax_rate > 0 && (
                     <div className="total-row">
-                      <span>TVA ({detailInvoice.tax_rate}%) :</span>
-                      <span style={{ fontWeight: '600', color: '#334155' }}>{detailInvoice.tax_amount.toFixed(2)} €</span>
+                      <span>{t('vat')} ({detailInvoice.tax_rate}%):</span>
+                      <span style={{ fontWeight: '600', color: '#334155' }}>{detailInvoice.tax_amount.toFixed(2)} EUR</span>
                     </div>
                   )}
                   {detailInvoice.discount > 0 && (
                     <div className="total-row" style={{ color: '#dc2626' }}>
-                      <span>Remise exceptionnelle :</span>
-                      <span>-{detailInvoice.discount.toFixed(2)} €</span>
+                      <span>{t('exceptionalDiscount')}</span>
+                      <span>-{detailInvoice.discount.toFixed(2)} EUR</span>
                     </div>
                   )}
                   <div className="total-row total-grand">
-                    <span>Net à Payer TTC :</span>
-                    <span>{detailInvoice.total.toFixed(2)} €</span>
+                    <span>{t('netToPay')}:</span>
+                    <span>{detailInvoice.total.toFixed(2)} EUR</span>
                   </div>
                   {detailInvoice.payment_method && (
                     <div style={{ fontSize: '11px', color: '#64748b', marginTop: '10px', borderTop: '1px solid #e2e8f0', paddingTop: '6px', textAlign: 'right', fontStyle: 'italic' }}>
-                      Mode de règlement : {detailInvoice.payment_method}
+                      {t('paymentMode')} {detailInvoice.payment_method}
                     </div>
                   )}
                 </div>
@@ -384,7 +414,7 @@ export function Invoices() {
               {/* BLOC NOTES */}
               {detailInvoice.notes && (
                 <div className="notes-box">
-                  <strong style={{ display: 'block', marginBottom: '4px', color: '#0f172a', textTransform: 'uppercase', fontSize: '11px' }}>Notes & Conditions de règlement :</strong>
+                  <strong style={{ display: 'block', marginBottom: '4px', color: '#0f172a', textTransform: 'uppercase', fontSize: '11px' }}>{t('paymentTermsNotes')}:</strong>
                   {detailInvoice.notes}
                 </div>
               )}
@@ -392,10 +422,10 @@ export function Invoices() {
               {/* ESPACE DE SIGNATURE DE SÉCURITÉ */}
               <div className="signatures">
                 <div className="sig-block">
-                  <div className="sig-line">Cachet et Signature du Garage</div>
+                  <div className="sig-line">{t('garageStamp')}</div>
                 </div>
                 <div className="sig-block">
-                  <div className="sig-line">Bon pour Accord — Signature Client</div>
+                  <div className="sig-line">{t('clientSignature')}</div>
                 </div>
               </div>
             </div>

@@ -59,7 +59,7 @@ export function Settings() {
             </div>
             <div>
               <h3 className="font-semibold text-slate-800 dark:text-slate-100">{t('profile')}</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Your account information</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{t('accountInformation')}</p>
             </div>
           </div>
 
@@ -78,7 +78,7 @@ export function Settings() {
               label={t('name')}
               value={fullName}
               onChange={e => setFullName(e.target.value)}
-              placeholder="Your full name"
+              placeholder={t('fullNamePlaceholder')}
             />
             <Input
               label={t('phone')}
@@ -92,7 +92,7 @@ export function Settings() {
               icon={saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
               variant={saved ? 'secondary' : 'primary'}
             >
-              {saved ? 'Saved!' : t('save')}
+              {saved ? t('saved') : t('save')}
             </Button>
           </div>
         </Card>
@@ -107,7 +107,7 @@ export function Settings() {
             </div>
             <div>
               <h3 className="font-semibold text-slate-800 dark:text-slate-100">{t('darkMode')}</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Toggle dark or light theme</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{t('themeHelp')}</p>
             </div>
           </div>
           <button
@@ -126,7 +126,7 @@ export function Settings() {
             </div>
             <div>
               <h3 className="font-semibold text-slate-800 dark:text-slate-100">{t('language')}</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Choose display language</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{t('languageHelp')}</p>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
@@ -151,7 +151,7 @@ export function Settings() {
 
         {/* App info */}
         <div className="text-center text-xs text-slate-400 dark:text-slate-500 py-2">
-          TruckGarage Pro v1.0 · Professional Garage Management
+          {t('appInfo')}
         </div>
       </div>
     </Layout>

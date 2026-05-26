@@ -48,15 +48,14 @@ export function Login() {
             TruckGarage<br /><span className="text-orange-400">Pro</span>
           </h1>
           <p className="text-slate-300 text-lg leading-relaxed">
-            Professional garage management system for truck repair workshops.
-            Manage clients, trucks, work orders, workers, and invoices all in one place.
+            {t('professionalSystem')} {t('manageEverything')}
           </p>
           <div className="mt-10 grid grid-cols-2 gap-4">
             {[
-              { label: 'Work Orders',   value: 'Full Tracking' },
-              { label: 'Invoices',      value: 'PDF Ready'     },
-              { label: 'Multi-language',value: 'AR / FR / EN'  },
-              { label: 'Mobile First',  value: 'Responsive'    },
+              { label: t('jobs'),          value: t('fullTracking') },
+              { label: t('invoices'),      value: t('pdfReady')     },
+              { label: t('multiLanguage'), value: 'AR / FR / EN'    },
+              { label: t('mobileFirst'),   value: t('responsive')   },
             ].map(item => (
               <div key={item.label} className="bg-white/5 rounded-xl p-4 border border-white/10">
                 <p className="text-orange-400 font-bold text-sm">{item.value}</p>
@@ -66,7 +65,7 @@ export function Login() {
           </div>
           {/* Default credentials hint */}
           <div className="mt-8 bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
-            <p className="text-orange-300 text-sm font-semibold mb-1">Default login</p>
+            <p className="text-orange-300 text-sm font-semibold mb-1">{t('defaultLogin')}</p>
             <p className="text-slate-400 text-xs">Email: admin@garage.com</p>
             <p className="text-slate-400 text-xs">Password: admin123</p>
           </div>
@@ -89,8 +88,8 @@ export function Login() {
             </h2>
             <p className="text-slate-400 text-sm mb-8">
               {mode === 'signin'
-                ? 'Welcome back! Sign in to your account.'
-                : 'Create an account to get started.'}
+                ? t('welcomeBack')
+                : t('createAccountPrompt')}
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -101,7 +100,7 @@ export function Login() {
                     type="text"
                     value={fullName}
                     onChange={e => setFullName(e.target.value)}
-                    placeholder="Your full name"
+                    placeholder={t('fullNamePlaceholder')}
                     required
                     className="w-full rounded-lg border border-slate-600 bg-slate-700/50 px-4 py-3 text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition"
                   />
@@ -154,7 +153,7 @@ export function Login() {
             </form>
 
             <p className="text-center text-sm text-slate-400 mt-6">
-              {mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}{' '}
+              {mode === 'signin' ? t('noAccount') : t('hasAccount')}{' '}
               <button
                 onClick={() => { setMode(m => m === 'signin' ? 'signup' : 'signin'); setError(''); }}
                 className="text-orange-400 hover:text-orange-300 font-medium transition-colors"

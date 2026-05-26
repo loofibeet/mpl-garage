@@ -32,14 +32,17 @@ export function Search() {
     ]);
     setResults({
       companies: compRes.data || [],
-      trucks: (truckRes.data || []).map(t => ({ ...t, company: (t as { companies?: Company }).companies })),
-      jobs: (jobsRes.data || []).map(j => ({ ...j, company: (j as { companies?: Company }).companies, truck: (j as { trucks?: Truck }).trucks })),
-      invoices: (invRes.data || []).map(i => ({ ...i, company: (i as { companies?: Company }).companies })),
+      trucks: (truckRes.data || []).map((truck: Truck & { companies?: Company }) => ({ ...truck, company: truck.companies })),
+      jobs: (jobsRes.data || []).map((job: RepairJob & { companies?: Company; trucks?: Truck }) => ({ ...job, company: job.companies, truck: job.trucks })),
+      invoices: (invRes.data || []).map((invoice: Invoice & { companies?: Company }) => ({ ...invoice, company: invoice.companies })),
     });
     setLoading(false);
   };
 
   const total = results ? results.companies.length + results.trucks.length + results.jobs.length + results.invoices.length : 0;
+  const truckStatusLabel = (status: string) => ({ active: t('active'), in_repair: t('inRepair'), retired: t('retired') }[status] || status);
+  const jobStatusLabel = (status: string) => ({ pending: t('pending'), in_progress: t('inProgress'), completed: t('completed'), cancelled: t('cancelled') }[status] || status);
+  const invoiceStatusLabel = (status: string) => ({ draft: t('draft'), sent: t('sent'), paid: t('paid'), overdue: t('overdue'), cancelled: t('cancelled') }[status] || status);
 
   return (
     <Layout title={t('search')}>
@@ -99,7 +102,7 @@ export function Search() {
                       <p className="font-medium text-slate-800 dark:text-slate-200">{tr.make} {tr.model} <span className="font-mono text-orange-500">({tr.plate_number})</span></p>
                       <p className="text-xs text-slate-500">{tr.company?.name} · VIN: {tr.vin || '—'}</p>
                     </div>
-                    <Badge variant={statusVariant(tr.status)}>{tr.status}</Badge>
+                    <Badge variant={statusVariant(tr.status)}>{truckStatusLabel(tr.status)}</Badge>
                   </div>
                 </Card>
               ))}
@@ -119,7 +122,7 @@ export function Search() {
                       <p className="font-medium font-mono text-slate-800 dark:text-slate-200">{j.job_number}</p>
                       <p className="text-xs text-slate-500">{j.company?.name} · {j.truck?.plate_number}</p>
                     </div>
-                    <Badge variant={statusVariant(j.status)}>{j.status}</Badge>
+                    <Badge variant={statusVariant(j.status)}>{jobStatusLabel(j.status)}</Badge>
                   </div>
                 </Card>
               ))}
@@ -137,9 +140,9 @@ export function Search() {
                     <FileText className="w-5 h-5 text-sky-500 flex-shrink-0" />
                     <div className="flex-1">
                       <p className="font-medium font-mono text-slate-800 dark:text-slate-200">{inv.invoice_number}</p>
-                      <p className="text-xs text-slate-500">{inv.company?.name} · ${inv.total.toFixed(2)}</p>
+                      <p className="text-xs text-slate-500">{inv.company?.name} · {inv.total.toFixed(2)} EUR</p>
                     </div>
-                    <Badge variant={statusVariant(inv.status)}>{inv.status}</Badge>
+                    <Badge variant={statusVariant(inv.status)}>{invoiceStatusLabel(inv.status)}</Badge>
                   </div>
                 </Card>
               ))}
@@ -150,7 +153,7 @@ export function Search() {
         {!results && (
           <div className="text-center py-12 text-slate-400 dark:text-slate-500">
             <SearchIcon className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">Type to search companies, trucks, work orders, or invoices</p>
+            <p className="text-sm">{t('typeToSearch')}</p>
           </div>
         )}
       </div>

@@ -71,7 +71,7 @@ export const db = {
     return newRow;
   },
 
-  update<T extends { id: string }>(table: string, id: string, changes: Partial<T>): T | null {
+  update<T extends { id: string }>(table: string, id: string, changes: object): T | null {
     const rows = read<T>(table);
     const idx = rows.findIndex(r => r.id === id);
     if (idx === -1) return null;

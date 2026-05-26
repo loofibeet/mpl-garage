@@ -41,19 +41,20 @@ export function Companies() {
   const handleSave = () => {
     if (!form.name.trim()) return;
     setSaving(true);
-    if (editItem) { db.update('companies', editItem.id, form); }
-    else { db.insert('companies', form); }
+    const payload = { ...form, city: '' };
+    if (editItem) { db.update('companies', editItem.id, payload); }
+    else { db.insert('companies', payload); }
     setSaving(false); setModalOpen(false); load();
   };
 
   const handleDelete = (id: string) => {
-    if (!confirm('Delete this company?')) return;
+    if (!confirm(t('deleteCompanyConfirm'))) return;
     db.remove('companies', id); load();
   };
 
   const filtered = companies.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.city.toLowerCase().includes(search.toLowerCase())
+    c.address.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -74,14 +75,14 @@ export function Companies() {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center flex-shrink-0"><Building2 className="w-5 h-5 text-orange-600 dark:text-orange-400" /></div>
-                    <div><h3 className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-tight">{company.name}</h3>{company.city && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{company.city}</p>}</div>
+                    <div><h3 className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-tight">{company.name}</h3></div>
                   </div>
                   <Badge variant="info" className="flex-shrink-0"><TruckIcon className="w-3 h-3 mr-1" />{company.truck_count || 0}</Badge>
                 </div>
                 {company.phone && <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-1"><Phone className="w-3.5 h-3.5" />{company.phone}</div>}
                 {company.address && <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-3"><MapPin className="w-3.5 h-3.5" />{company.address}</div>}
                 <div className="flex gap-2 pt-3 border-t border-slate-100 dark:border-slate-700/50">
-                  <button onClick={() => { window.history.pushState({}, '', `/companies/${company.id}`); window.dispatchEvent(new PopStateEvent('popstate')); }} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-sky-600 dark:hover:text-sky-400 transition-colors px-2 py-1 rounded"><Eye className="w-3.5 h-3.5" /> View</button>
+                  <button onClick={() => { window.history.pushState({}, '', `/companies/${company.id}`); window.dispatchEvent(new PopStateEvent('popstate')); }} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-sky-600 dark:hover:text-sky-400 transition-colors px-2 py-1 rounded"><Eye className="w-3.5 h-3.5" /> {t('view')}</button>
                   <button onClick={() => openEdit(company)} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors px-2 py-1 rounded"><Pencil className="w-3.5 h-3.5" /> {t('edit')}</button>
                   <button onClick={() => handleDelete(company.id)} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-600 dark:hover:text-red-400 transition-colors px-2 py-1 rounded ml-auto"><Trash2 className="w-3.5 h-3.5" /> {t('delete')}</button>
                 </div>
@@ -90,18 +91,15 @@ export function Companies() {
           </div>
         )}
       </div>
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editItem ? `Edit: ${editItem.name}` : t('addCompany')}>
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editItem ? `${t('editCompanyTitle')}: ${editItem.name}` : t('addCompany')}>
         <div className="space-y-4">
           <Input label={t('name') + ' *'} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Dally Trans" />
           <div className="grid grid-cols-2 gap-4">
             <Input label={t('phone')} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 234 567 890" />
             <Input label={t('email')} type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="info@company.com" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Input label={t('address')} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="123 Main St" />
-            <Input label={t('city')} value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="City" />
-          </div>
-          <Textarea label={t('notes')} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} placeholder="Additional notes..." />
+          <Input label={t('address')} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder={t('address')} />
+          <Textarea label={t('notes')} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} placeholder={t('notes')} />
           <div className="flex gap-3 pt-2">
             <Button variant="outline" onClick={() => setModalOpen(false)} className="flex-1 justify-center">{t('cancel')}</Button>
             <Button onClick={handleSave} loading={saving} className="flex-1 justify-center">{t('save')}</Button>
