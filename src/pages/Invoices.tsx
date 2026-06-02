@@ -35,7 +35,7 @@ function normalizeWhatsappNumber(phone: string): string {
 }
 
 export function Invoices() {
-  const { t } = useApp();
+  const { t, language } = useApp(); // Assumes language contains 'fr', 'en', or 'ar'
   const [invoices,  setInvoices]  = useState<InvoiceWithRelations[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [jobs,      setJobs]      = useState<(RepairJob & { truck?: Truck })[]>([]);
@@ -53,9 +53,7 @@ export function Invoices() {
     const allInvoices  = db.getAll<Invoice>('invoices').sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     const allCompanies = db.getAll<Company>('companies').sort((a, b) => a.name.localeCompare(b.name));
     const allTrucks    = db.getAll<Truck>('trucks');
-    const allJobs      = db.getAll<RepairJob>('repair_jobs')
-      .filter(j => ['completed', 'in_progress'].includes(j.status))
-      .sort((a, b) => a.job_number.localeCompare(b.job_number));
+    const allJobs      = db.getAll<RepairJob>('repair_jobs');
 
     const jobsWithTruck = allJobs.map(j => ({ ...j, truck: allTrucks.find(t => t.id === j.truck_id) }));
 
@@ -65,7 +63,7 @@ export function Invoices() {
       job:     jobsWithTruck.find(j => j.id === inv.job_id),
     })));
     setCompanies(allCompanies);
-    setJobs(jobsWithTruck);
+    setJobs(jobsWithTruck.filter(j => ['completed', 'in_progress'].includes(j.status)));
     setLoading(false);
   };
 
@@ -132,43 +130,68 @@ export function Invoices() {
     if (!content) return;
     const win = window.open('', '_blank');
     if (!win) return;
-    win.document.write(`<html><head><title>${t('invoicePrintTitle')}</title><style>
-      body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 50px; color: #1e293b; background: #fff; line-height: 1.5; }
-      .header-container { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #ea580c; padding-bottom: 25px; margin-bottom: 35px; }
-      .brand-title { font-size: 28px; font-weight: 800; color: #0f172a; margin: 0; text-transform: uppercase; letter-spacing: -0.5px; }
-      .brand-subtitle { font-size: 12px; color: #ea580c; font-weight: 600; margin: 2px 0 0 0; text-transform: uppercase; letter-spacing: 1px; }
-      .brand-details { font-size: 12px; color: #64748b; margin-top: 8px; line-height: 1.4; }
-      .invoice-title-container { text-align: right; }
-      .invoice-head { font-size: 32px; font-weight: 900; color: #0f172a; margin: 0; text-transform: uppercase; }
-      .invoice-number { font-size: 16px; font-weight: 700; color: #ea580c; font-family: monospace; margin: 4px 0; }
-      .info-grid { display: grid; grid-cols: 2; display: flex; justify-content: space-between; gap: 40px; margin-bottom: 40px; }
-      .info-block { flex: 1; }
-      .block-label { text-transform: uppercase; font-size: 11px; font-weight: 700; color: #94a3b8; tracking: 1px; margin-bottom: 6px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
-      .info-text { font-size: 13px; color: #334155; margin: 3px 0; }
-      .vehicle-badge { background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; border-radius: 8px; margin-top: 8px; }
-      table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 30px; }
-      th { background: #0f172a; color: #ffffff; text-transform: uppercase; font-size: 11px; font-weight: 700; padding: 12px 14px; text-align: left; letter-spacing: 0.5px; }
-      th:nth-child(2), td:nth-child(2) { text-align: center; }
-      th:nth-child(3), td:nth-child(3) { text-align: right; }
-      th:nth-child(4), td:nth-child(4) { text-align: right; }
-      td { padding: 12px 14px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #334155; }
-      tr:nth-child(even) td { background: #f8fafc; }
-      .totals-container { display: flex; justify-content: flex-end; margin-top: 20px; }
-      .totals-box { width: 300px; background: #f8fafc; border-radius: 8px; padding: 16px; border: 1px solid #e2e8f0; }
-      .total-row { display: flex; justify-content: space-between; font-size: 13px; color: #64748b; padding: 4px 0; }
-      .total-grand { font-size: 18px; font-weight: 800; color: #0f172a; border-t: 2px solid #ea580c; margin-top: 8px; padding-top: 8px; }
-      .notes-box { background: #f8fafc; border-left: 3px solid #ea580c; padding: 14px; border-radius: 0 8px 8px 0; font-size: 12px; color: #475569; margin-top: 40px; }
-      .signatures { margin-top: 70px; display: grid; flex-direction: row; display: flex; justify-content: space-between; gap: 80px; }
-      .sig-block { flex: 1; text-align: center; }
-      .sig-line { border-top: 1px dashed #cbd5e1; margin-top: 60px; padding-top: 8px; font-size: 11px; color: #94a3b8; text-transform: uppercase; }
-      @media print { body { padding: 0; } button { display: none; } }
-    </style></head><body>${content.innerHTML}</body></html>`);
+    
+    const tailwindStyles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map(style => style.outerHTML)
+      .join('\n');
+
+    win.document.write(`
+      <html>
+        <head>
+          <title>${t('invoicePrintTitle')}</title>
+          ${tailwindStyles}
+          <style>
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1e293b; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            @media print {
+              body { padding: 0; margin: 0; }
+              .no-print { display: none !important; }
+              .print-shadow-none { box-shadow: none !important; border: none !important; }
+            }
+          </style>
+        </head>
+        <body class="p-6 sm:p-12 max-w-4xl mx-auto">
+          ${content.innerHTML}
+        </body>
+      </html>
+    `);
     win.document.close();
-    win.print();
+    
+    setTimeout(() => {
+      win.focus();
+      win.print();
+      win.close();
+    }, 500);
   };
 
-  const invoiceShareText = (inv: InvoiceWithRelations) =>
-    `${t('invoiceWhatsappMessage')} ${inv.invoice_number}\n${t('companyLabel')}: ${inv.company?.name || ''}\n${t('totalLabel')}: ${inv.total.toFixed(2)} EUR\n${t('statusLabel')}: ${statusLabel(inv.status)}`;
+  // Helper template engine handling French, English, and Arabic messages dynamically without emojis
+  const buildShareMessage = (inv: InvoiceWithRelations) => {
+    const currentLang = language || 'fr';
+    const invoiceNo = inv.invoice_number;
+    const companyName = inv.company?.name || '';
+    const totalAmount = `${inv.total.toFixed(2)} EUR`;
+    const statusStr = statusLabel(inv.status);
+
+    if (currentLang === 'ar') {
+      return `MPL — Mécanique Poids Lourds\n` +
+             `فاتورة رقم: ${invoiceNo}\n` +
+             `العميل: ${companyName}\n` +
+             `المبلغ الإجمالي: ${totalAmount}\n` +
+             `الحالة: ${statusStr}`;
+    } else if (currentLang === 'en') {
+      return `MPL — Mécanique Poids Lourds\n` +
+             `Invoice Number: ${invoiceNo}\n` +
+             `Client: ${companyName}\n` +
+             `Total Amount: ${totalAmount}\n` +
+             `Status: ${statusStr}`;
+    } else {
+      // Default to French
+      return `MPL — Mécanique Poids Lourds\n` +
+             `Facture N°: ${invoiceNo}\n` +
+             `Client: ${companyName}\n` +
+             `Montant Total: ${totalAmount}\n` +
+             `Statut: ${statusStr}`;
+    }
+  };
 
   const handleWhatsApp = (inv: InvoiceWithRelations) => {
     const phone = inv.company?.phone?.trim() || window.prompt(`${t('enterWhatsappNumber')}:`);
@@ -177,7 +200,7 @@ export function Invoices() {
     const whatsappNumber = normalizeWhatsappNumber(phone);
     if (!whatsappNumber.replace(/\D/g, '')) return;
 
-    const msg = encodeURIComponent(`${invoiceShareText(inv)}\n\n${t('whatsappPdfNote')}`);
+    const msg = encodeURIComponent(`${buildShareMessage(inv)}\n\n${t('whatsappPdfNote') || ''}`);
     window.open(`https://wa.me/${whatsappNumber.replace(/^\+/, '')}?text=${msg}`, '_blank');
   };
 
@@ -185,8 +208,13 @@ export function Invoices() {
     const email = inv.company?.email?.trim() || window.prompt(`${t('enterEmailAddress')}:`);
     if (!email) return;
 
-    const subject = encodeURIComponent(`${t('invoiceDocument')} ${inv.invoice_number}`);
-    const body = encodeURIComponent(`${invoiceShareText(inv)}\n\n${t('emailPdfNote')}`);
+    const currentLang = language || 'fr';
+    let subjectText = `Facture ${inv.invoice_number}`;
+    if (currentLang === 'en') subjectText = `Invoice ${inv.invoice_number}`;
+    if (currentLang === 'ar') subjectText = `فاتورة رقم ${inv.invoice_number}`;
+
+    const subject = encodeURIComponent(subjectText);
+    const body = encodeURIComponent(`${buildShareMessage(inv)}\n\n${t('emailPdfNote') || ''}`);
     const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`;
     const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
     window.open(gmailUrl, '_blank') || window.location.assign(mailtoUrl);
@@ -296,116 +324,148 @@ export function Invoices() {
         </div>
       </Modal>
 
-      {/* MODAL : VISUALISATION ET REÇU PRÊT POUR IMPRESSION (PDF READY) */}
+      {/* MODAL : VISUALISATION EN-TÊTE ET CONTENU OPTIMISÉS */}
       {detailInvoice && (
         <Modal open={!!detailInvoice} onClose={() => setDetailInvoice(null)} title={t('invoicePreview')} size="lg">
-          <div>
-            <div className="flex gap-2 mb-6 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+          <div className="text-slate-800 dark:text-slate-100">
+            <div className="flex gap-2 mb-6 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 no-print">
               <Button icon={<Printer className="w-4 h-4" />} onClick={handlePrint}>{t('printPdf')}</Button>
               <Button variant="outline" icon={<MessageCircle className="w-4 h-4" />} onClick={() => handleWhatsApp(detailInvoice)}>{t('sendWhatsapp')}</Button>
               <Button variant="outline" icon={<Mail className="w-4 h-4" />} onClick={() => handleEmail(detailInvoice)}>{t('sendEmail')}</Button>
             </div>
             
-            <div ref={printRef} className="bg-white p-2 text-slate-800">
-              {/* EN-TÊTE PROFESSIONNEL TRUCKGARAGE PRO */}
-              <div className="header-container">
-                <div>
-                  <h1 className="brand-title">MPL — Mécanique Poids Lourds</h1>
-                  <p className="brand-subtitle font-mono">Repair & Industrial Maintenance</p>
-                  <p className="brand-details">
-                    Zone Artisanale des Transports<br />
-                    Tel: +33 6 69 00 56 51 · ml.77.mpl@gmail.com<br />
-                    Siret: 123 456 789 00012 - Code APE 4520B
-                  </p>
+            <div ref={printRef} className="bg-white p-4 sm:p-6 text-slate-900 border border-slate-100 rounded-xl print-shadow-none">
+              
+              {/* EN-TÊTE MPL AVEC FIX TRANSPARENCE LOGO */}
+              <div className="flex flex-col sm:flex-row justify-between items-start border-b-2 border-orange-600 pb-5 mb-6 gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 bg-white rounded-xl overflow-hidden flex items-center justify-center p-1 border border-slate-200">
+                    <img src="/mpl-logo.png" alt="MPL" className="object-contain w-full h-full" />
+                  </div>
+                  <div>
+                    <h1 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight m-0">MPL — Mécanique Poids Lourds</h1>
+                    <p className="text-xs text-orange-600 font-bold uppercase tracking-wider m-0 mt-0.5">Repair & Industrial Maintenance</p>
+                    <p className="text-xs text-slate-500 mt-2 leading-relaxed max-w-sm">
+                      Zone Artisanale des Transports<br />
+                      Tel: +33 6 69 00 56 51 · ml.77.mpl@gmail.com<br />
+                      Siret: 123 456 789 00012 - Code APE 4520B
+                    </p>
+                  </div>
                 </div>
-                <div className="invoice-title-container">
-                  <h2 className="invoice-head">{t('invoiceDocument')}</h2>
-                  <p className="invoice-number">{detailInvoice.invoice_number}</p>
-                  <div style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.5px', marginTop: '6px' }}>
+                <div className="sm:text-right w-full sm:w-auto">
+                  <h2 className="text-2xl sm:text-3xl font-black text-slate-900 uppercase m-0">{t('invoiceDocument')}</h2>
+                  <p className="text-base sm:text-lg font-bold text-orange-600 font-mono m-0 mt-1">{detailInvoice.invoice_number}</p>
+                  <div className="text-xs uppercase font-extrabold tracking-wider mt-2 bg-slate-100 inline-block px-2.5 py-1 rounded text-slate-700">
                     {t('status')}: {statusLabel(detailInvoice.status)}
                   </div>
                 </div>
               </div>
 
-              {/* GRILLE D'INFORMATION EMETTEUR / CLIENT */}
-              <div className="info-grid">
-                <div className="info-block">
-                  <div className="block-label">{t('billedTo')}</div>
-                  <p className="info-text" style={{ fontWeight: 'bold', fontSize: '14px', color: '#0f172a' }}>{detailInvoice.company?.name}</p>
-                  <p className="info-text">{detailInvoice.company?.address}</p>
-                  <p className="info-text">{t('phone')}: {detailInvoice.company?.phone}</p>
+              {/* GRILLE CLIENT / EMETTEUR */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <div className="uppercase text-[10px] font-bold text-slate-400 tracking-wider mb-2 border-b border-slate-200/60 pb-1">{t('billedTo')}</div>
+                  <p className="text-base font-bold text-slate-900 mb-1">{detailInvoice.company?.name}</p>
+                  <p className="text-xs text-slate-600 leading-relaxed mb-1">{detailInvoice.company?.address}</p>
+                  <p className="text-xs font-semibold text-slate-700">{t('phone')}: {detailInvoice.company?.phone}</p>
                 </div>
                 
-                <div className="info-block" style={{ textAlign: 'right' }}>
-                  <div className="block-label">{t('adminDetails')}</div>
-                  <p className="info-text"><strong>{t('issueDate')}:</strong> {detailInvoice.issue_date}</p>
-                  {detailInvoice.due_date && <p className="info-text"><strong>{t('dueDate')}:</strong> {detailInvoice.due_date}</p>}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col justify-between">
+                  <div>
+                    <div className="uppercase text-[10px] font-bold text-slate-400 tracking-wider mb-2 border-b border-slate-200/60 pb-1">{t('adminDetails')}</div>
+                    <div className="text-xs text-slate-600 space-y-1">
+                      <p><strong>{t('issueDate')}:</strong> {detailInvoice.issue_date}</p>
+                      {detailInvoice.due_date && <p><strong>{t('dueDate')}:</strong> {detailInvoice.due_date}</p>}
+                    </div>
+                  </div>
                   
                   {detailInvoice.job?.truck && (
-                    <div className="vehicle-badge" style={{ textAlign: 'left' }}>
-                      <span style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '2px' }}>{t('vehicleServiced')}</span>
-                      <strong style={{ fontSize: '13px', color: '#1e293b' }}>{detailInvoice.job.truck.make} {detailInvoice.job.truck.model}</strong>
-                      <span style={{ fontFamily: 'monospace', display: 'block', fontSize: '12px', color: '#ea580c', fontWeight: 'bold', marginTop: '2px' }}>{t('licensePlate')} {detailInvoice.job.truck.plate_number}</span>
+                    <div className="mt-3 bg-white border border-slate-200 p-2.5 rounded-lg shadow-sm">
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-tight">{t('vehicleServiced')}</span>
+                      <strong className="text-xs text-slate-800 block mt-0.5">{detailInvoice.job.truck.make} {detailInvoice.job.truck.model}</strong>
+                      <span className="font-mono text-xs text-orange-600 font-bold block mt-0.5">{t('licensePlate')} : {detailInvoice.job.truck.plate_number}</span>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* TABLEAU DES LIGNES COMPTABLES */}
-              {detailInvoice.lines && detailInvoice.lines.length > 0 && (
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>{t('designation')}</th>
-                        <th style={{ width: '80px' }}>{t('quantity')}</th>
-                        <th style={{ width: '110px' }}>{t('priceUnit')}</th>
-                        <th style={{ width: '120px' }}>{t('totalExTax')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detailInvoice.lines.map(line => (
-                        <tr key={line.id}>
-                          <td>
-                            <div style={{ fontWeight: '600', color: '#0f172a' }}>{line.description}</div>
-                            <span style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: '600' }}>Type: {line.item_type}</span>
-                          </td>
-                          <td>{line.quantity}</td>
-                          <td>{line.unit_price.toFixed(2)} EUR</td>
-                          <td style={{ fontWeight: '600' }}>{line.total.toFixed(2)} EUR</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              {/* NOUVELLE SECTION : DESCRIPTION DES TRAVAUX RÉALISÉS */}
+              {detailInvoice.job && (detailInvoice.job.problem_description || detailInvoice.job.repairs_completed) && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6 text-xs space-y-2">
+                  <div className="uppercase text-[10px] font-bold text-orange-600 tracking-wider border-b border-slate-200 pb-1 mb-2">
+                    Description des Travaux & Interventions
+                  </div>
+                  {detailInvoice.job.problem_description && (
+                    <p className="text-slate-700"><strong>Symptômes / Problème :</strong> {detailInvoice.job.problem_description}</p>
+                  )}
+                  {detailInvoice.job.diagnostics && (
+                    <p className="text-slate-700"><strong>Diagnostic :</strong> {detailInvoice.job.diagnostics}</p>
+                  )}
+                  {detailInvoice.job.repairs_completed && (
+                    <p className="text-slate-900 bg-white p-2 rounded border border-slate-200 mt-1">
+                      <strong>Réparations effectuées :</strong> {detailInvoice.job.repairs_completed}
+                    </p>
+                  )}
                 </div>
               )}
 
-              {/* CADRE DES TOTALISATIONS FINANCIÈRES */}
-              <div className="totals-container">
-                <div className="totals-box">
-                  <div className="total-row">
+              {/* TABLEAU COMPTABLE */}
+              {detailInvoice.lines && detailInvoice.lines.length > 0 && (
+                <div className="border border-slate-200 rounded-xl overflow-hidden mb-6 shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[500px]">
+                      <thead>
+                        <tr className="bg-slate-900 text-white">
+                          <th className="text-[11px] uppercase font-bold tracking-wider px-4 py-3">{t('designation')}</th>
+                          <th className="text-[11px] uppercase font-bold tracking-wider px-4 py-3 text-center w-20">{t('quantity')}</th>
+                          <th className="text-[11px] uppercase font-bold tracking-wider px-4 py-3 text-right w-28">{t('priceUnit')}</th>
+                          <th className="text-[11px] uppercase font-bold tracking-wider px-4 py-3 text-right w-32">{t('totalExTax')}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 text-xs">
+                        {detailInvoice.lines.map(line => (
+                          <tr key={line.id} className="odd:bg-white even:bg-slate-50/60 hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3">
+                              <div className="font-semibold text-slate-900">{line.description}</div>
+                              <span className="text-[9px] bg-slate-100 text-slate-500 rounded px-1.5 py-0.5 uppercase font-medium mt-1 inline-block">Type: {line.item_type}</span>
+                            </td>
+                            <td className="px-4 py-3 text-center font-medium text-slate-700">{line.quantity}</td>
+                            <td className="px-4 py-3 text-right text-slate-600">{line.unit_price.toFixed(2)} EUR</td>
+                            <td className="px-4 py-3 text-right font-bold text-slate-900">{line.total.toFixed(2)} EUR</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* TOTALISATIONS */}
+              <div className="flex justify-end mb-6">
+                <div className="w-full sm:w-72 bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 text-xs">
+                  <div className="flex justify-between text-slate-500 font-medium">
                     <span>{t('generalTotalExTax')}</span>
-                    <span style={{ fontWeight: '600', color: '#334155' }}>{detailInvoice.subtotal.toFixed(2)} EUR</span>
+                    <span className="font-semibold text-slate-800">{detailInvoice.subtotal.toFixed(2)} EUR</span>
                   </div>
                   {detailInvoice.tax_rate > 0 && (
-                    <div className="total-row">
+                    <div className="flex justify-between text-slate-500 font-medium">
                       <span>{t('vat')} ({detailInvoice.tax_rate}%):</span>
-                      <span style={{ fontWeight: '600', color: '#334155' }}>{detailInvoice.tax_amount.toFixed(2)} EUR</span>
+                      <span className="font-semibold text-slate-800">{detailInvoice.tax_amount.toFixed(2)} EUR</span>
                     </div>
                   )}
                   {detailInvoice.discount > 0 && (
-                    <div className="total-row" style={{ color: '#dc2626' }}>
+                    <div className="flex justify-between text-red-600 font-medium">
                       <span>{t('exceptionalDiscount')}</span>
-                      <span>-{detailInvoice.discount.toFixed(2)} EUR</span>
+                      <span className="font-bold">-{detailInvoice.discount.toFixed(2)} EUR</span>
                     </div>
                   )}
-                  <div className="total-row total-grand">
+                  <div className="flex justify-between font-black text-slate-900 text-sm border-t border-orange-500 pt-2 mt-1">
                     <span>{t('netToPay')}:</span>
-                    <span>{detailInvoice.total.toFixed(2)} EUR</span>
+                    <span className="text-orange-600">{detailInvoice.total.toFixed(2)} EUR</span>
                   </div>
                   {detailInvoice.payment_method && (
-                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '10px', borderTop: '1px solid #e2e8f0', paddingTop: '6px', textAlign: 'right', fontStyle: 'italic' }}>
-                      {t('paymentMode')} {detailInvoice.payment_method}
+                    <div className="text-[10px] text-slate-400 pt-2 border-t border-slate-200/60 text-right italic font-medium">
+                      {t('paymentMode')} : {detailInvoice.payment_method}
                     </div>
                   )}
                 </div>
@@ -413,19 +473,21 @@ export function Invoices() {
 
               {/* BLOC NOTES */}
               {detailInvoice.notes && (
-                <div className="notes-box">
-                  <strong style={{ display: 'block', marginBottom: '4px', color: '#0f172a', textTransform: 'uppercase', fontSize: '11px' }}>{t('paymentTermsNotes')}:</strong>
+                <div className="bg-slate-50 border-l-4 border-orange-500 p-3 rounded-r-xl text-xs text-slate-600 mb-6 leading-relaxed">
+                  <strong className="block text-[10px] uppercase font-bold text-slate-900 tracking-wider mb-1">{t('paymentTermsNotes')}:</strong>
                   {detailInvoice.notes}
                 </div>
               )}
 
-              {/* ESPACE DE SIGNATURE DE SÉCURITÉ */}
-              <div className="signatures">
-                <div className="sig-block">
-                  <div className="sig-line">{t('garageStamp')}</div>
+              {/* SIGNATURES */}
+              <div className="flex flex-col sm:flex-row justify-between gap-6 mt-12 pt-4 border-t border-slate-100">
+                <div className="flex-1 text-center sm:text-left">
+                  <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-12">{t('garageStamp')}</div>
+                  <div className="border-t border-dashed border-slate-300 w-3/4 mx-auto sm:mx-0"></div>
                 </div>
-                <div className="sig-block">
-                  <div className="sig-line">{t('clientSignature')}</div>
+                <div className="flex-1 text-center sm:text-right">
+                  <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-12">{t('clientSignature')}</div>
+                  <div className="border-t border-dashed border-slate-300 w-3/4 mx-auto sm:mr-0"></div>
                 </div>
               </div>
             </div>
