@@ -156,7 +156,7 @@ export interface JobPhoto {
 export interface Invoice {
   id: string;
   invoice_number: string;
-  job_id: string;
+  job_id: string | null;
   company_id: string;
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
   issue_date: string;
@@ -168,6 +168,7 @@ export interface Invoice {
   total: number;
   notes: string;
   payment_method: string;
+  payment_link: string;
   paid_at: string | null;
   created_at: string;
   updated_at: string;

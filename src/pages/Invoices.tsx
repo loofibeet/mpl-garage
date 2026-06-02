@@ -8,7 +8,7 @@ import { Badge, statusVariant } from '../components/ui/Badge';
 import { useApp } from '../contexts/AppContext';
 import { db } from '../lib/storage';
 import { Invoice, Company, RepairJob, Truck, InvoiceLineItem } from '../lib/database.types';
-import { Plus, FileText, Printer, Trash2, Pencil, Eye, X, MessageCircle, Mail } from 'lucide-react';
+import { Plus, FileText, Printer, Trash2, Pencil, Eye, X } from 'lucide-react';
 
 function generateInvoiceNumber() {
   const now = new Date();
@@ -23,19 +23,13 @@ function removeWhere(table: string, field: string, value: string) {
 const emptyForm = {
   invoice_number: '', job_id: '', company_id: '', status: 'draft' as Invoice['status'],
   issue_date: new Date().toISOString().split('T')[0], due_date: '', tax_rate: '20',
-  discount: '0', notes: '', payment_method: '',
+  discount: '0', notes: '', payment_method: '', payment_link: '',
 };
 const emptyLine = { description: '', quantity: '1', unit_price: '0', item_type: 'service' as InvoiceLineItem['item_type'] };
 type InvoiceWithRelations = Invoice & { company?: Company; job?: RepairJob & { truck?: Truck }; lines?: InvoiceLineItem[] };
 
-function normalizeWhatsappNumber(phone: string): string {
-  const trimmed = phone.trim();
-  const prefix = trimmed.startsWith('+') ? '+' : '';
-  return `${prefix}${trimmed.replace(/\D/g, '')}`;
-}
-
 export function Invoices() {
-  const { t, language } = useApp(); // Assumes language contains 'fr', 'en', or 'ar'
+  const { t, language } = useApp();
   const [invoices,  setInvoices]  = useState<InvoiceWithRelations[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [jobs,      setJobs]      = useState<(RepairJob & { truck?: Truck })[]>([]);
@@ -80,7 +74,7 @@ export function Invoices() {
 
   const openEdit = (inv: Invoice) => {
     setEditItem(inv);
-    setForm({ invoice_number: inv.invoice_number, job_id: inv.job_id, company_id: inv.company_id, status: inv.status, issue_date: inv.issue_date, due_date: inv.due_date || '', tax_rate: String(inv.tax_rate), discount: String(inv.discount), notes: inv.notes, payment_method: inv.payment_method });
+    setForm({ invoice_number: inv.invoice_number, job_id: inv.job_id || '', company_id: inv.company_id, status: inv.status, issue_date: inv.issue_date, due_date: inv.due_date || '', tax_rate: String(inv.tax_rate), discount: String(inv.discount), notes: inv.notes, payment_method: inv.payment_method, payment_link: inv.payment_link || '' });
     const existingLines = db.getAll<InvoiceLineItem>('invoice_line_items').filter(l => l.invoice_id === inv.id);
     setLines(existingLines.map(l => ({ description: l.description, quantity: String(l.quantity), unit_price: String(l.unit_price), item_type: l.item_type })));
     setModalOpen(true);
@@ -100,6 +94,7 @@ export function Invoices() {
       status: form.status, issue_date: form.issue_date, due_date: form.due_date || null,
       tax_rate: parseFloat(form.tax_rate) || 0, discount: parseFloat(form.discount) || 0,
       subtotal, tax_amount: taxAmount, total, notes: form.notes, payment_method: form.payment_method,
+      payment_link: form.payment_link.trim(),
     };
 
     let invId: string;
@@ -136,7 +131,7 @@ export function Invoices() {
       .join('\n');
 
     win.document.write(`
-      <html>
+      <html lang="${language}" dir="${language === 'ar' ? 'rtl' : 'ltr'}">
         <head>
           <title>${t('invoicePrintTitle')}</title>
           ${tailwindStyles}
@@ -163,68 +158,12 @@ export function Invoices() {
     }, 500);
   };
 
-  // Helper template engine handling French, English, and Arabic messages dynamically without emojis
-  const buildShareMessage = (inv: InvoiceWithRelations) => {
-    const currentLang = language || 'fr';
-    const invoiceNo = inv.invoice_number;
-    const companyName = inv.company?.name || '';
-    const totalAmount = `${inv.total.toFixed(2)} EUR`;
-    const statusStr = statusLabel(inv.status);
-
-    if (currentLang === 'ar') {
-      return `MPL — Mécanique Poids Lourds\n` +
-             `فاتورة رقم: ${invoiceNo}\n` +
-             `العميل: ${companyName}\n` +
-             `المبلغ الإجمالي: ${totalAmount}\n` +
-             `الحالة: ${statusStr}`;
-    } else if (currentLang === 'en') {
-      return `MPL — Mécanique Poids Lourds\n` +
-             `Invoice Number: ${invoiceNo}\n` +
-             `Client: ${companyName}\n` +
-             `Total Amount: ${totalAmount}\n` +
-             `Status: ${statusStr}`;
-    } else {
-      // Default to French
-      return `MPL — Mécanique Poids Lourds\n` +
-             `Facture N°: ${invoiceNo}\n` +
-             `Client: ${companyName}\n` +
-             `Montant Total: ${totalAmount}\n` +
-             `Statut: ${statusStr}`;
-    }
-  };
-
-  const handleWhatsApp = (inv: InvoiceWithRelations) => {
-    const phone = inv.company?.phone?.trim() || window.prompt(`${t('enterWhatsappNumber')}:`);
-    if (!phone) return;
-
-    const whatsappNumber = normalizeWhatsappNumber(phone);
-    if (!whatsappNumber.replace(/\D/g, '')) return;
-
-    const msg = encodeURIComponent(`${buildShareMessage(inv)}\n\n${t('whatsappPdfNote') || ''}`);
-    window.open(`https://wa.me/${whatsappNumber.replace(/^\+/, '')}?text=${msg}`, '_blank');
-  };
-
-  const handleEmail = (inv: InvoiceWithRelations) => {
-    const email = inv.company?.email?.trim() || window.prompt(`${t('enterEmailAddress')}:`);
-    if (!email) return;
-
-    const currentLang = language || 'fr';
-    let subjectText = `Facture ${inv.invoice_number}`;
-    if (currentLang === 'en') subjectText = `Invoice ${inv.invoice_number}`;
-    if (currentLang === 'ar') subjectText = `فاتورة رقم ${inv.invoice_number}`;
-
-    const subject = encodeURIComponent(subjectText);
-    const body = encodeURIComponent(`${buildShareMessage(inv)}\n\n${t('emailPdfNote') || ''}`);
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`;
-    const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
-    window.open(gmailUrl, '_blank') || window.location.assign(mailtoUrl);
-  };
-
   const filtered = invoices.filter(inv => { const q = search.toLowerCase(); return !q || inv.invoice_number.toLowerCase().includes(q) || inv.company?.name.toLowerCase().includes(q); });
 
   const statusOptions  = [{ value: 'draft', label: t('draft') }, { value: 'sent', label: t('sent') }, { value: 'paid', label: t('paid') }, { value: 'overdue', label: t('overdue') }, { value: 'cancelled', label: t('cancelled') }];
   const statusLabel    = (s: string) => statusOptions.find(o => o.value === s)?.label || s;
   const itemTypeOptions = [{ value: 'service', label: t('service') }, { value: 'part', label: t('part') }, { value: 'labor', label: t('control') }];
+  const itemTypeLabel = (s: string) => itemTypeOptions.find(o => o.value === s)?.label || s;
   const { subtotal, taxAmount, total } = calcTotals(lines, parseFloat(form.tax_rate) || 0, parseFloat(form.discount) || 0);
 
   return (
@@ -260,8 +199,6 @@ export function Invoices() {
                   <div className="flex flex-col gap-1 flex-shrink-0">
                     <button onClick={() => openDetail(inv)} className="p-1.5 text-slate-400 hover:text-sky-600 rounded transition-colors" title={t('view')}><Eye className="w-4 h-4" /></button>
                     <button onClick={() => openEdit(inv)} className="p-1.5 text-slate-400 hover:text-orange-600 rounded transition-colors" title={t('edit')}><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => handleWhatsApp(inv)} className="p-1.5 text-slate-400 hover:text-green-600 rounded transition-colors" title={inv.company?.phone || t('sendWhatsapp')}><MessageCircle className="w-4 h-4" /></button>
-                    <button onClick={() => handleEmail(inv)} className="p-1.5 text-slate-400 hover:text-sky-600 rounded transition-colors" title={inv.company?.email || t('sendEmail')}><Mail className="w-4 h-4" /></button>
                     <button onClick={() => handleDelete(inv.id)} className="p-1.5 text-slate-400 hover:text-red-600 rounded transition-colors" title={t('delete')}><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
@@ -310,6 +247,7 @@ export function Invoices() {
             <Input label={`${t('discountAmount')} (EUR)`} type="number" value={form.discount} onChange={e => setForm(f => ({ ...f, discount: e.target.value }))} />
             <Input label={t('paymentMethod')} value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))} placeholder={t('paymentMethod')} />
           </div>
+          <Input label={t('paymentLink')} type="url" value={form.payment_link} onChange={e => setForm(f => ({ ...f, payment_link: e.target.value }))} placeholder={t('paymentLinkPlaceholder')} />
           <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 space-y-1.5 text-sm">
             <div className="flex justify-between text-slate-600 dark:text-slate-400"><span>{t('subtotalExTax')}</span><span>{subtotal.toFixed(2)} EUR</span></div>
             <div className="flex justify-between text-slate-600 dark:text-slate-400"><span>{t('vat')} ({form.tax_rate}%)</span><span>{taxAmount.toFixed(2)} EUR</span></div>
@@ -330,8 +268,6 @@ export function Invoices() {
           <div className="text-slate-800 dark:text-slate-100">
             <div className="flex gap-2 mb-6 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 no-print">
               <Button icon={<Printer className="w-4 h-4" />} onClick={handlePrint}>{t('printPdf')}</Button>
-              <Button variant="outline" icon={<MessageCircle className="w-4 h-4" />} onClick={() => handleWhatsApp(detailInvoice)}>{t('sendWhatsapp')}</Button>
-              <Button variant="outline" icon={<Mail className="w-4 h-4" />} onClick={() => handleEmail(detailInvoice)}>{t('sendEmail')}</Button>
             </div>
             
             <div ref={printRef} className="bg-white p-4 sm:p-6 text-slate-900 border border-slate-100 rounded-xl print-shadow-none">
@@ -393,17 +329,17 @@ export function Invoices() {
               {detailInvoice.job && (detailInvoice.job.problem_description || detailInvoice.job.repairs_completed) && (
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6 text-xs space-y-2">
                   <div className="uppercase text-[10px] font-bold text-orange-600 tracking-wider border-b border-slate-200 pb-1 mb-2">
-                    Description des Travaux & Interventions
+                    {t('workInterventions')}
                   </div>
                   {detailInvoice.job.problem_description && (
-                    <p className="text-slate-700"><strong>Symptômes / Problème :</strong> {detailInvoice.job.problem_description}</p>
+                    <p className="text-slate-700"><strong>{t('symptomsProblem')}:</strong> {detailInvoice.job.problem_description}</p>
                   )}
                   {detailInvoice.job.diagnostics && (
-                    <p className="text-slate-700"><strong>Diagnostic :</strong> {detailInvoice.job.diagnostics}</p>
+                    <p className="text-slate-700"><strong>{t('diagnostics')}:</strong> {detailInvoice.job.diagnostics}</p>
                   )}
                   {detailInvoice.job.repairs_completed && (
                     <p className="text-slate-900 bg-white p-2 rounded border border-slate-200 mt-1">
-                      <strong>Réparations effectuées :</strong> {detailInvoice.job.repairs_completed}
+                      <strong>{t('repairsCompleted')}:</strong> {detailInvoice.job.repairs_completed}
                     </p>
                   )}
                 </div>
@@ -427,7 +363,7 @@ export function Invoices() {
                           <tr key={line.id} className="odd:bg-white even:bg-slate-50/60 hover:bg-slate-50 transition-colors">
                             <td className="px-4 py-3">
                               <div className="font-semibold text-slate-900">{line.description}</div>
-                              <span className="text-[9px] bg-slate-100 text-slate-500 rounded px-1.5 py-0.5 uppercase font-medium mt-1 inline-block">Type: {line.item_type}</span>
+                              <span className="text-[9px] bg-slate-100 text-slate-500 rounded px-1.5 py-0.5 uppercase font-medium mt-1 inline-block">{t('itemTypeLabel')}: {itemTypeLabel(line.item_type)}</span>
                             </td>
                             <td className="px-4 py-3 text-center font-medium text-slate-700">{line.quantity}</td>
                             <td className="px-4 py-3 text-right text-slate-600">{line.unit_price.toFixed(2)} EUR</td>
@@ -465,7 +401,13 @@ export function Invoices() {
                   </div>
                   {detailInvoice.payment_method && (
                     <div className="text-[10px] text-slate-400 pt-2 border-t border-slate-200/60 text-right italic font-medium">
-                      {t('paymentMode')} : {detailInvoice.payment_method}
+                      {t('paymentMode')} {detailInvoice.payment_method}
+                    </div>
+                  )}
+                  {detailInvoice.payment_link?.trim() && (
+                    <div className="text-[10px] text-slate-500 pt-2 border-t border-slate-200/60 text-right font-medium">
+                      <span className="block text-slate-400 italic">{t('paymentLink')}</span>
+                      <a className="text-orange-600 break-all" href={detailInvoice.payment_link} target="_blank" rel="noreferrer">{detailInvoice.payment_link}</a>
                     </div>
                   )}
                 </div>

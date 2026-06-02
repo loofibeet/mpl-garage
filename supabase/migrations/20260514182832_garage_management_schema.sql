@@ -237,7 +237,7 @@ CREATE POLICY "Authenticated users can delete job photos"
 CREATE TABLE IF NOT EXISTS invoices (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   invoice_number text NOT NULL UNIQUE,
-  job_id uuid NOT NULL REFERENCES repair_jobs(id) ON DELETE RESTRICT,
+  job_id uuid REFERENCES repair_jobs(id) ON DELETE RESTRICT,
   company_id uuid NOT NULL REFERENCES companies(id) ON DELETE RESTRICT,
   status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'cancelled')),
   issue_date date DEFAULT CURRENT_DATE,
@@ -249,6 +249,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   total numeric(12,2) DEFAULT 0,
   notes text DEFAULT '',
   payment_method text DEFAULT '',
+  payment_link text DEFAULT '',
   paid_at timestamptz DEFAULT NULL,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
